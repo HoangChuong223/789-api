@@ -1,10 +1,15 @@
 const WebSocket = require('ws');
-const { format } = require('util');
+const express = require('express');
+const http = require('http');
+
+const app = express();
+const PORT = 3000;
 
 // === Biến toàn cục ===
 let id_phien = null;
+let wsClient = null;
 
-// === Danh sách tin nhắn gửi đi ===
+// === Tin nhắn cần gửi ===
 const messagesToSend = [
   [1, "MiniGame", "saoban", "ere2234", {
     info: "{\"ipAddress\":\"125.235.239.187\",\"userId\":\"2ef4335a-6562-4c64-b012-46ef83a25800\",\"username\":\"S8_saoban\",\"timestamp\":1749643344994,\"refreshToken\":\"e790adfa529e42639552261c7a7d206b.51b6327dccb94fe1b4a96040d5ded732\"}",
@@ -14,22 +19,24 @@ const messagesToSend = [
 ];
 
 // === Hàm kết nối lại nếu bị ngắt ===
-function connect() {
-  const ws = new WebSocket('wss://websocket.atpman.net/websocket', {
-    headers: {
-      'Host': 'websocket.atpman.net',
-      'Origin': 'https://789club.sx ',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36'
-    }
+function connectWebSocket() {
+  const headers = {
+    'Host': 'websocket.atpman.net',
+    'Origin': 'https://789club.sx ',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36'
+  };
+
+  wsClient = new WebSocket('wss://websocket.atpman.net/websocket', {
+    headers
   });
 
   // === Khi mở kết nối ===
-  ws.on('open', () => {
-    console.log('✅ Đã kết nối thành công');
+  wsClient.on('open', () => {
+    console.log('✅ Đã kết nối thành công đến WebSocket');
     messagesToSend.forEach((msg, index) => {
       setTimeout(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify(msg));
+        if (wsClient.readyState === WebSocket.OPEN) {
+          wsClient.send(JSON.stringify(msg));
           console.log(`📤 Gửi tin nhắn ${index + 1}`);
         }
       }, index * 1000);
@@ -37,7 +44,7 @@ function connect() {
   });
 
   // === Khi nhận dữ liệu ===
-  ws.on('message', (data) => {
+  wsClient.on('message', (data) => {
     try {
       const message = JSON.parse(data.toString());
       if (Array.isArray(message) && message.length >= 2 && typeof message[1] === 'object') {
@@ -59,6 +66,8 @@ function connect() {
           const outcome = total > 10 ? 'Tai' : 'Xiu';
           console.log(`🎲 ${d1}, ${d2}, ${d3} → Tổng: ${total} → Kết quả: ${outcome}`);
         }
+      } else {
+        console.warn("⚠️ Dữ liệu không hợp lệ:", data.toString());
       }
     } catch (err) {
       console.error('❌ Lỗi parse JSON:', err.message);
@@ -66,28 +75,30 @@ function connect() {
   });
 
   // === Xử lý lỗi ===
-  ws.on('error', (err) => {
+  wsClient.on('error', (err) => {
     console.error('❌ Lỗi kết nối:', err.message);
   });
 
   // === Khi kết nối bị đóng ===
-  ws.on('close', (code, reason) => {
+  wsClient.on('close', (code, reason) => {
     console.log(`🔌 Đã đóng kết nối: ${code} - ${reason.toString()}`);
     console.log('🔁 Thử kết nối lại sau 5 giây...');
-    setTimeout(connect, 5000);
+    setTimeout(connectWebSocket, 5000);
   });
 }
 
-// === Khởi động server đơn giản để giữ app luôn chạy ===
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 3000;
-
+// === API đơn giản để test server đang chạy ===
 app.get('/', (req, res) => {
-  res.send('WebSocket client is running...');
+  res.send(`
+    <h1>WebSocket Client đang chạy</h1>
+    <p>Kết nối tới wss://websocket.atpman.net/websocket</p>
+    <p>Xem log trong terminal để thấy kết quả.</p>
+  `);
 });
 
-app.listen(PORT, () => {
+// === Khởi động server ===
+const server = http.createServer(app);
+server.listen(PORT, 'localhost', () => {
   console.log(`🌐 Server đang chạy tại http://localhost:${PORT}`);
-  connect(); // Bắt đầu kết nối WebSocket
+  connectWebSocket(); // Bắt đầu kết nối WebSocket
 });
