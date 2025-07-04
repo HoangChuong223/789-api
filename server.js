@@ -3,9 +3,11 @@ const express = require('express');
 const http = require('http');
 
 const app = express();
-const PORT = process.env.PORT || 10000; // Render yêu cầu dùng PORT env
+const PORT = process.env.PORT || 10000; // Port cho Render
 
 let wsClient = null;
+let currentSessionId = null;
+let latestResult = null;
 
 // === Tin nhắn gửi đi ===
 const messagesToSend = [
@@ -58,6 +60,7 @@ function connectWebSocket() {
         // Xử lý phiên mới
         if (parsed[0] === 2 && typeof parsed[1] === 'object' && parsed[1].hasOwnProperty('sid')) {
           const sid = parsed[1].sid;
+          currentSessionId = sid;
           console.log(`🎮 Phiên mới: ${sid}`);
         }
 
@@ -66,7 +69,12 @@ function connectWebSocket() {
           const { d1, d2, d3 } = parsed[1];
           const total = d1 + d2 + d3;
           const result = total > 10 ? 'Tai' : 'Xiu';
-          console.log(`🎲 Kết quả: ${d1}, ${d2}, ${d3} → Tổng: ${total} → ${result}`);
+          latestResult = {
+            id: "binhtool90",
+            id_phien: currentSessionId,
+            ket_qua: `${d1}-${d2}-${d3} = ${total} (${result})`
+          };
+          console.log(`🎲 Kết quả: ${latestResult.ket_qua}`);
         }
       } else {
         console.warn("⚠️ Dữ liệu không phải dạng array:", parsed);
@@ -87,11 +95,20 @@ function connectWebSocket() {
   });
 }
 
+// === API endpoint để lấy kết quả ===
+app.get('/result', (req, res) => {
+  if (!latestResult) {
+    return res.status(404).json({ error: "Không có kết quả hiện tại" });
+  }
+  res.json(latestResult);
+});
+
 // === API đơn giản để Render xác nhận app đang chạy ===
 app.get('/', (req, res) => {
   res.send(`
     <h1>WebSocket Client đang chạy</h1>
     <p>Xem log trong terminal để theo dõi kết quả.</p>
+    <p>Truy cập <a href="/result">/result</a> để xem kết quả gần nhất.</p>
   `);
 });
 
