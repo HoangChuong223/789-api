@@ -1,9 +1,14 @@
 const WebSocket = require("ws");
 const express = require("express");
 const cors = require("cors");
+const crypto = require("crypto");
 
 const WS_URL = "wss://websocket.atpman.net/websocket";
 
+// === Tạo WebSocket Key random ===
+const generateWSKey = () => crypto.randomBytes(16).toString("base64");
+
+// === Dữ liệu bot
 const LOGIN_MESSAGE = [
     1,
     "MiniGame",
@@ -17,7 +22,7 @@ const LOGIN_MESSAGE = [
             timestamp: 1751737271849,
             refreshToken: "6947ef5011a14921b42c70a57239b279.ba8aef3c9b094ec9961dc9c5def594cf"
         }),
-        signature: "2F796D8C4B47504CAE239FDD76768AE7335628E05F5FBF9BF3B4476D3F2A0CAA84EA1F47A164CD7623D19A04C12A950F83C0680C05994B07BA75BAE31D6C4356A05A66E6AA6A607C12C155A2FD411CE4BA7A558FCA3A692ECAF6018B83BEE10D035CCB7F51E9DFD7C12AB618C5E1EDD28329705D0BCDC6A17B596C37EF43F821"
+        signature: "2F796D8C4B47504CAE239FDD76768AE7335628E05F5FBF9BF3B4476D3F2A0CAA84EA1F47A164CD7623D19A04C12A950F83C0680C05994B07BA75BAE31D6C4356A05A66E6AA6A607C12C155A2FD411CE4BA7A558FCA3A692ECAF6018B83BEE10D035CCB7F51E9DFD7C12AB618C5E1EDD28329705D0BCDC6A17B596C37EF43F821" // rút gọn
     }
 ];
 
@@ -37,38 +42,47 @@ let pingInterval;
 let lastPong = Date.now();
 let firstConnection = true;
 
-// === WebSocket Client ===
-
+// === Kết nối WebSocket với đầy đủ header ===
 function connectWebSocket() {
+    const secWebSocketKey = generateWSKey();
+
     const ws = new WebSocket(WS_URL, {
         headers: {
-            "Host": "websocket.atpman.net",
-            "Origin": "https://play.789club.sx",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36",
             "Accept-Encoding": "gzip, deflate, br",
             "Accept-Language": "vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5",
             "Cache-Control": "no-cache",
-            "Pragma": "no-cache"
+            "Connection": "Upgrade",
+            "Host": "websocket.atpman.net",
+            "Origin": "https://play.789club.sx",
+            "Pragma": "no-cache",
+            "Sec-WebSocket-Extensions": "permessage-deflate; client_max_window_bits",
+            "Sec-WebSocket-Key": secWebSocketKey,
+            "Sec-WebSocket-Version": "13",
+            "Upgrade": "websocket",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36"
         }
     });
 
     ws.on("open", () => {
         console.log("✅ Đã kết nối WebSocket 789");
 
-        ws.send(JSON.stringify(LOGIN_MESSAGE));
-        console.log("📩 Đã gửi đăng nhập");
+        setTimeout(() => {
+            ws.send(JSON.stringify(LOGIN_MESSAGE));
+            console.log("📩 Đã gửi đăng nhập");
 
-        if (firstConnection) {
-            REGISTER_MESSAGES.forEach(msg => {
-                ws.send(JSON.stringify(msg));
-                console.log("📩 Đã đăng ký nhận kết quả:", msg);
-            });
-            firstConnection = false;
-        }
+            if (firstConnection) {
+                REGISTER_MESSAGES.forEach((msg, i) => {
+                    setTimeout(() => {
+                        ws.send(JSON.stringify(msg));
+                        console.log("📩 Đăng ký nhận kết quả:", msg);
+                    }, 200 + i * 300);
+                });
+                firstConnection = false;
+            }
+        }, Math.random() * 1000 + 1000);
 
         pingInterval = setInterval(() => {
-            const now = Date.now();
-            if (now - lastPong > 5000) {
+            if (Date.now() - lastPong > 5000) {
                 console.log("⚠️ Ping timeout > 5s, đóng kết nối");
                 ws.terminate();
             } else {
@@ -115,8 +129,7 @@ function connectWebSocket() {
     });
 }
 
-
-// === Express Server ===
+// === API Express
 const app = express();
 const PORT = 5000;
 app.use(cors());
@@ -129,5 +142,5 @@ app.listen(PORT, () => {
     console.log(`🌐 API đang chạy tại: http://localhost:${PORT}`);
 });
 
-// Start everything
+// === Khởi động WebSocket
 connectWebSocket();
