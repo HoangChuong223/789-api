@@ -38,8 +38,19 @@ let lastPong = Date.now();
 let firstConnection = true;
 
 // === WebSocket Client ===
+
 function connectWebSocket() {
-    const ws = new WebSocket(WS_URL);
+    const ws = new WebSocket(WS_URL, {
+        headers: {
+            "Host": "websocket.atpman.net",
+            "Origin": "https://play.789club.sx",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Language": "vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache"
+        }
+    });
 
     ws.on("open", () => {
         console.log("✅ Đã kết nối WebSocket 789");
@@ -55,12 +66,11 @@ function connectWebSocket() {
             firstConnection = false;
         }
 
-        // Ping mỗi 15s
         pingInterval = setInterval(() => {
             const now = Date.now();
             if (now - lastPong > 5000) {
                 console.log("⚠️ Ping timeout > 5s, đóng kết nối");
-                ws.terminate(); // Mất pong → reconnect
+                ws.terminate();
             } else {
                 ws.ping();
             }
@@ -97,12 +107,14 @@ function connectWebSocket() {
         console.log("🔌 Kết nối bị đóng:", code, "-", reason);
         clearInterval(pingInterval);
         console.log("⏳ Đợi 5 giây rồi reconnect...");
-        setTimeout(connectWebSocket, 2000);
+        setTimeout(connectWebSocket, 5000);
     });
 
     ws.on("error", (err) => {
         console.log("❌ Lỗi WebSocket:", err.message);
     });
+}
+
 }
 
 // === Express Server ===
