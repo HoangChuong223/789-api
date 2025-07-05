@@ -21,8 +21,17 @@ app.listen(PORT, () => {
     console.log(`🌐 Đang chạy server tại http://localhost:${PORT}`);
 });
 
-let pingInterval;
-let pongTimeout;
+let heartbeatTimeout;
+
+function startHeartbeat(ws) {
+    clearTimeout(heartbeatTimeout);
+    heartbeatTimeout = setTimeout(() => {
+        console.log("⏱ Không nhận dữ liệu quá 20s → reconnect...");
+        try {
+            ws.terminate(); // Đóng kết nối cũ để reconnect
+        } catch (e) {}
+    }, 20000); // 20 giây timeout
+}
 
 function connectWebSocket() {
     const ws = new WebSocket("wss://websocket.atpman.net/websocket");
@@ -30,7 +39,8 @@ function connectWebSocket() {
     ws.on("open", () => {
         console.log("✅ Đã kết nối tới WebSocket 789");
 
-        // Gửi login + đăng ký
+        startHeartbeat(ws); // bắt đầu kiểm tra nhịp dữ liệu
+
         const login = [
             1,
             "MiniGame",
@@ -55,27 +65,11 @@ function connectWebSocket() {
 
         ws.send(JSON.stringify(login));
         register.forEach(msg => ws.send(JSON.stringify(msg)));
-
-        // === Thiết lập ping/pong ===
-        pingInterval = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.ping();
-                // Nếu sau 10s không nhận được pong thì đóng kết nối
-                pongTimeout = setTimeout(() => {
-                    console.log("⚠️ Không nhận được pong! Đóng kết nối...");
-                    ws.terminate(); // sẽ tự trigger reconnect
-                }, 10000); // timeout 10s
-            }
-        }, 15000); // gửi ping mỗi 15s
-    });
-
-    ws.on("pong", () => {
-        // Nhận được pong thì clear timeout
-        clearTimeout(pongTimeout);
-        // console.log("📶 Nhận được pong");
     });
 
     ws.on("message", (data) => {
+        startHeartbeat(ws); // reset timeout khi có dữ liệu
+
         try {
             const msg = JSON.parse(data);
             if (Array.isArray(msg) && msg[0] === 5 && msg[1]?.cmd === 2006) {
@@ -99,8 +93,7 @@ function connectWebSocket() {
 
     ws.on("close", () => {
         console.log("🔌 Mất kết nối! Thử reconnect sau 5s...");
-        clearInterval(pingInterval);
-        clearTimeout(pongTimeout);
+        clearTimeout(heartbeatTimeout);
         setTimeout(connectWebSocket, 5000);
     });
 
