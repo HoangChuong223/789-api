@@ -7,7 +7,7 @@ const PORT = 5000;
 app.use(cors());
 
 let currentData = {
-    id: "binhtool90", // chủ sở hữu
+    id: "binhtool90",
     id_phien: null,
     xucxac: "",
     ket_qua: ""
@@ -22,15 +22,24 @@ app.listen(PORT, () => {
 });
 
 let heartbeatTimeout;
+let resendInterval;
 
 function startHeartbeat(ws) {
     clearTimeout(heartbeatTimeout);
     heartbeatTimeout = setTimeout(() => {
         console.log("⏱ Không nhận dữ liệu quá 20s → reconnect...");
         try {
-            ws.terminate(); // Đóng kết nối cũ để reconnect
+            ws.terminate(); // sẽ gọi close => reconnect
         } catch (e) {}
-    }, 20000); // 20 giây timeout
+    }, 20000); // timeout 20 giây
+}
+
+function sendRegister(ws) {
+    const register = [
+        [6, "MiniGame", "taixiuUnbalancedPlugin", { cmd: 2000 }],
+        [6, "MiniGame", "lobbyPlugin", { cmd: 10001 }]
+    ];
+    register.forEach(msg => ws.send(JSON.stringify(msg)));
 }
 
 function connectWebSocket() {
@@ -38,8 +47,7 @@ function connectWebSocket() {
 
     ws.on("open", () => {
         console.log("✅ Đã kết nối tới WebSocket 789");
-
-        startHeartbeat(ws); // bắt đầu kiểm tra nhịp dữ liệu
+        startHeartbeat(ws);
 
         const login = [
             1,
@@ -58,17 +66,19 @@ function connectWebSocket() {
             }
         ];
 
-        const register = [
-            [6, "MiniGame", "taixiuUnbalancedPlugin", { cmd: 2000 }],
-            [6, "MiniGame", "lobbyPlugin", { cmd: 10001 }]
-        ];
-
         ws.send(JSON.stringify(login));
-        register.forEach(msg => ws.send(JSON.stringify(msg)));
+        sendRegister(ws); // gửi ngay sau login
+
+        // Thiết lập gửi lại cmd sau mỗi 3 phút
+        clearInterval(resendInterval);
+        resendInterval = setInterval(() => {
+            console.log("🔁 Gửi lại đăng ký nhận kết quả (cmd: 2000 & 10001)");
+            sendRegister(ws);
+        }, 180000); // 180000 ms = 3 phút
     });
 
     ws.on("message", (data) => {
-        startHeartbeat(ws); // reset timeout khi có dữ liệu
+        startHeartbeat(ws); // reset timeout nếu có dữ liệu
 
         try {
             const msg = JSON.parse(data);
@@ -94,6 +104,7 @@ function connectWebSocket() {
     ws.on("close", () => {
         console.log("🔌 Mất kết nối! Thử reconnect sau 5s...");
         clearTimeout(heartbeatTimeout);
+        clearInterval(resendInterval);
         setTimeout(connectWebSocket, 5000);
     });
 
