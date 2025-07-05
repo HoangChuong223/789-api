@@ -7,31 +7,22 @@ const PORT = 5000;
 app.use(cors());
 
 let currentData = {
-    id: "binhtool90",
+    id: "binhtool90",        // chủ sở hữu
     id_phien: null,
     xucxac: "",
     ket_qua: ""
 };
 
+// Serve kết quả ra localhost
 app.get("/", (req, res) => {
     res.json(currentData);
 });
 app.listen(PORT, () => {
-    console.log(`🌐 Server chạy tại http://localhost:${PORT}`);
+    console.log(`🌐 Đang chạy server tại http://localhost:${PORT}`);
 });
 
-let ws;
-let pingInterval;
-let reconnectTimeout;
-let isManuallyClosed = false;
-
 function connectWebSocket() {
-    ws = new WebSocket("wss://websocket.atpman.net/websocket", {
-        headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0",
-            "Origin": "https://play.789club.sx"
-        }
-    });
+    const ws = new WebSocket("wss://websocket.atpman.net/websocket");
 
     ws.on("open", () => {
         console.log("✅ Đã kết nối tới WebSocket 789");
@@ -60,17 +51,6 @@ function connectWebSocket() {
 
         ws.send(JSON.stringify(login));
         register.forEach(msg => ws.send(JSON.stringify(msg)));
-
-        // Gửi ping định kỳ
-        pingInterval = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.ping();
-            }
-        }, 15000);
-    });
-
-    ws.on("pong", () => {
-        console.log("📶 Ping OK từ server");
     });
 
     ws.on("message", (data) => {
@@ -88,7 +68,7 @@ function connectWebSocket() {
                     ket_qua: `${tong} => ${ket_qua}`
                 };
 
-                console.log(`🎲 Phiên: ${sid} | Xúc xắc: ${d1}-${d2}-${d3} | Tổng: ${tong} => ${ket_qua}`);
+                console.log(`🆕 Phiên: ${sid} | Xúc xắc: ${d1}-${d2}-${d3} | Tổng: ${tong} => ${ket_qua}`);
             }
         } catch (e) {
             console.log("❌ Lỗi xử lý tin nhắn:", e.message);
@@ -96,15 +76,12 @@ function connectWebSocket() {
     });
 
     ws.on("close", () => {
-        console.log("🔌 Mất kết nối WebSocket. Thử reconnect sau 2.5s...");
-        clearInterval(pingInterval);
-        if (!isManuallyClosed) {
-            reconnectTimeout = setTimeout(connectWebSocket, 2500);
-        }
+        console.log("🔌 Mất kết nối! Thử reconnect sau 5s...");
+        setTimeout(connectWebSocket, 5000);
     });
 
     ws.on("error", (err) => {
-        console.error("❌ Lỗi WebSocket:", err.message);
+        console.log("❌ Lỗi WebSocket:", err.message);
     });
 }
 
