@@ -115,7 +115,6 @@ function connectWebSocket() {
     });
 }
 
-}
 
 // === Express Server ===
 const app = express();
