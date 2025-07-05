@@ -13,16 +13,16 @@ let currentData = {
     ket_qua: ""
 };
 
+// Serve ra localhost
 app.get("/", (req, res) => {
     res.json(currentData);
 });
+
 app.listen(PORT, () => {
-    console.log(`🌐 Server chạy tại http://localhost:${PORT}`);
+    console.log(`🌐 Đang chạy server tại http://localhost:${PORT}`);
 });
 
-const WS_URL = "wss://websocket.atpman.net/websocket";
-
-// === Các gói tin gửi ban đầu ===
+// === Gói tin login & đăng ký ===
 const LOGIN_MESSAGE = [
     1,
     "MiniGame",
@@ -45,14 +45,15 @@ const REGISTER_MESSAGES = [
     [6, "MiniGame", "lobbyPlugin", { cmd: 10001 }]
 ];
 
-// === Hàm xử lý WebSocket ===
-function startWebSocket() {
-    const ws = new WebSocket(WS_URL);
+function connectWebSocket() {
+    const ws = new WebSocket("wss://websocket.atpman.net/websocket");
 
     ws.on("open", () => {
-        console.log("✅ Kết nối thành công 789, gửi lại lệnh...");
+        console.log("✅ Đã kết nối WebSocket 789, gửi lại login + đăng ký...");
         ws.send(JSON.stringify(LOGIN_MESSAGE));
-        REGISTER_MESSAGES.forEach(msg => ws.send(JSON.stringify(msg)));
+        REGISTER_MESSAGES.forEach(msg => {
+            ws.send(JSON.stringify(msg));
+        });
     });
 
     ws.on("message", (data) => {
@@ -73,13 +74,13 @@ function startWebSocket() {
                 console.log(`🆕 Phiên: ${sid} | Xúc xắc: ${d1}-${d2}-${d3} | Tổng: ${tong} => ${ket_qua}`);
             }
         } catch (e) {
-            console.log("❌ Lỗi xử lý:", e.message);
+            console.log("❌ Lỗi xử lý tin nhắn:", e.message);
         }
     });
 
     ws.on("close", () => {
-        console.log("🔌 Mất kết nối! Reconnect sau 5s...");
-        setTimeout(startWebSocket, 5000);
+        console.log("🔌 Mất kết nối! Thử reconnect sau 5s...");
+        setTimeout(connectWebSocket, 5000);
     });
 
     ws.on("error", (err) => {
@@ -87,4 +88,4 @@ function startWebSocket() {
     });
 }
 
-startWebSocket();
+connectWebSocket();
