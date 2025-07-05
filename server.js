@@ -1,120 +1,88 @@
-const WebSocket = require('ws');
-const express = require('express');
-const http = require('http');
+const WebSocket = require("ws");
+const express = require("express");
+const cors = require("cors");
 
 const app = express();
-const PORT = process.env.PORT || 10000; // Port cho Render
+const PORT = 5000;
+app.use(cors());
 
-let wsClient = null;
-let currentSessionId = null;
-let latestResult = null;
+let currentData = {
+    id: "binhtool90",        // chủ sở hữu
+    id_phien: null,
+    xucxac: "",
+    ket_qua: ""
+};
 
-// === Tin nhắn gửi đi ===
-const messagesToSend = [
-  [1, "MiniGame", "saoban", "ere2234", {
-    info: "{\"ipAddress\":\"125.235.239.187\",\"userId\":\"2ef4335a-6562-4c64-b012-46ef83a25800\",\"username\":\"S8_saoban\",\"timestamp\":1749643344994,\"refreshToken\":\"e790adfa529e42639552261c7a7d206b.51b6327dccb94fe1b4a96040d5ded732\"}",
-    signature: "20399D67A1EC9E78B287200DE26F206FFEBB01C545C52EDAC0F0C347CF26A7900FB5AD74BC2DC9A35634C0E9F45BF799B3D8696052D5392CFB9BE0F4CF086BE8F50699C542C7693722B4EE68ECDCF72EB887B91A46FC662087E233EE7C10FED14505920B6687F5B9E30B4FF6EACBF1305FDB9A5DC4ED010DBA3C3AB3DAE5AC14"
-  }],
-  [6, "MiniGame", "taixiuUnbalancedPlugin", { cmd: 2000 }],
-];
+// Serve kết quả ra localhost
+app.get("/", (req, res) => {
+    res.json(currentData);
+});
+app.listen(PORT, () => {
+    console.log(`🌐 Đang chạy server tại http://localhost:${PORT}`);
+});
 
 function connectWebSocket() {
-  const headers = {
-    'Host': 'websocket.atpman.net',
-    'Origin': 'https://789club.sx ',
-    'User-Agent': 'Mozilla/5.0'
-  };
+    const ws = new WebSocket("wss://websocket.atpman.net/websocket");
 
-  wsClient = new WebSocket('wss://websocket.atpman.net/websocket', {
-    headers,
-  });
+    ws.on("open", () => {
+        console.log("✅ Đã kết nối tới WebSocket 789");
 
-  wsClient.on('open', () => {
-    console.log('✅ Kết nối WebSocket thành công');
-    messagesToSend.forEach((msg, index) => {
-      setTimeout(() => {
-        if (wsClient.readyState === WebSocket.OPEN) {
-          wsClient.send(JSON.stringify(msg));
-          console.log(`📤 Gửi lệnh ${index + 1}`);
-        }
-      }, index * 1000);
+        const login = [
+            1,
+            "MiniGame",
+            "apitx789",
+            "binhtool90",
+            {
+                info: JSON.stringify({
+                    ipAddress: "2a09:bac1:7a80:10::3c1:3a",
+                    userId: "6af5b295-bae8-4c69-8386-afeaafd4101b",
+                    username: "S8_apitx789",
+                    timestamp: 1751737271849,
+                    refreshToken: "6947ef5011a14921b42c70a57239b279.ba8aef3c9b094ec9961dc9c5def594cf"
+                }),
+                signature: "2F796D8C4B47504CAE239FDD76768AE7335628E05F5FBF9BF3B4476D3F2A0CAA84EA1F47A164CD7623D19A04C12A950F83C0680C05994B07BA75BAE31D6C4356A05A66E6AA6A607C12C155A2FD411CE4BA7A558FCA3A692ECAF6018B83BEE10D035CCB7F51E9DFD7C12AB618C5E1EDD28329705D0BCDC6A17B596C37EF43F821"
+            }
+        ];
+
+        const register = [
+            [6, "MiniGame", "taixiuUnbalancedPlugin", { cmd: 2000 }],
+            [6, "MiniGame", "lobbyPlugin", { cmd: 10001 }]
+        ];
+
+        ws.send(JSON.stringify(login));
+        register.forEach(msg => ws.send(JSON.stringify(msg)));
     });
-  });
 
-  wsClient.on('message', (data) => {
-    try {
-      const rawMessage = data.toString();
+    ws.on("message", (data) => {
+        try {
+            const msg = JSON.parse(data);
+            if (Array.isArray(msg) && msg[0] === 5 && msg[1]?.cmd === 2006) {
+                const { sid, d1, d2, d3 } = msg[1];
+                const tong = d1 + d2 + d3;
+                const ket_qua = tong >= 11 ? "Tài" : "Xỉu";
 
-      // Kiểm tra nếu là JSON hợp lệ
-      let parsed;
-      try {
-        parsed = JSON.parse(rawMessage);
-      } catch (e) {
-        console.warn("⚠️ Không phải JSON:", rawMessage);
-        return;
-      }
+                currentData = {
+                    id: "binhtool90",
+                    id_phien: sid,
+                    xucxac: `${d1}-${d2}-${d3}`,
+                    ket_qua: `${tong} => ${ket_qua}`
+                };
 
-      if (Array.isArray(parsed)) {
-        console.log("📨 Nhận phản hồi:", parsed);
-
-        // Xử lý phiên mới
-        if (parsed[0] === 2 && typeof parsed[1] === 'object' && parsed[1].hasOwnProperty('sid')) {
-          const sid = parsed[1].sid;
-          currentSessionId = sid;
-          console.log(`🎮 Phiên mới: ${sid}`);
+                console.log(`🆕 Phiên: ${sid} | Xúc xắc: ${d1}-${d2}-${d3} | Tổng: ${tong} => ${ket_qua}`);
+            }
+        } catch (e) {
+            console.log("❌ Lỗi xử lý tin nhắn:", e.message);
         }
+    });
 
-        // Xử lý kết quả phiên
-        if (parsed[0] === 2 && parsed[1]?.hasOwnProperty('d1') && parsed[1]?.hasOwnProperty('d2') && parsed[1]?.hasOwnProperty('d3')) {
-          const { d1, d2, d3 } = parsed[1];
-          const total = d1 + d2 + d3;
-          const result = total > 10 ? 'Tai' : 'Xiu';
-          latestResult = {
-            id: "binhtool90",
-            id_phien: currentSessionId,
-            ket_qua: `${d1}-${d2}-${d3} = ${total} (${result})`
-          };
-          console.log(`🎲 Kết quả: ${latestResult.ket_qua}`);
-        }
-      } else {
-        console.warn("⚠️ Dữ liệu không phải dạng array:", parsed);
-      }
-    } catch (err) {
-      console.error("❌ Lỗi xử lý message:", err.message);
-    }
-  });
+    ws.on("close", () => {
+        console.log("🔌 Mất kết nối! Thử reconnect sau 5s...");
+        setTimeout(connectWebSocket, 5000);
+    });
 
-  wsClient.on('error', (err) => {
-    console.error("❌ Lỗi kết nối WebSocket:", err.message);
-  });
-
-  wsClient.on('close', (code, reason) => {
-    console.log(`🔌 Đã đóng kết nối: ${code} - ${reason.toString()}`);
-    console.log("🔁 Thử kết nối lại sau 5 giây...");
-    setTimeout(connectWebSocket, 5000);
-  });
+    ws.on("error", (err) => {
+        console.log("❌ Lỗi WebSocket:", err.message);
+    });
 }
 
-// === API endpoint để lấy kết quả ===
-app.get('/result', (req, res) => {
-  if (!latestResult) {
-    return res.status(404).json({ error: "Không có kết quả hiện tại" });
-  }
-  res.json(latestResult);
-});
-
-// === API đơn giản để Render xác nhận app đang chạy ===
-app.get('/', (req, res) => {
-  res.send(`
-    <h1>WebSocket Client đang chạy</h1>
-    <p>Xem log trong terminal để theo dõi kết quả.</p>
-    <p>Truy cập <a href="/result">/result</a> để xem kết quả gần nhất.</p>
-  `);
-});
-
-// === Khởi động server ===
-const server = http.createServer(app);
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🌐 Server đang chạy tại http://0.0.0.0:${PORT}`);
-  connectWebSocket();
-});
+connectWebSocket();
