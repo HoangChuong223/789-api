@@ -16,38 +16,25 @@ let currentData = {
 app.get("/", (req, res) => {
     res.json(currentData);
 });
-
 app.listen(PORT, () => {
-    console.log(`🌐 Đang chạy server tại http://localhost:${PORT}`);
+    console.log(`🌐 Server chạy tại http://localhost:${PORT}`);
 });
 
-let heartbeatTimeout;
-let resendInterval;
-
-function startHeartbeat(ws) {
-    clearTimeout(heartbeatTimeout);
-    heartbeatTimeout = setTimeout(() => {
-        console.log("⏱ Không nhận dữ liệu quá 20s → reconnect...");
-        try {
-            ws.terminate(); // sẽ gọi close => reconnect
-        } catch (e) {}
-    }, 20000); // timeout 20 giây
-}
-
-function sendRegister(ws) {
-    const register = [
-        [6, "MiniGame", "taixiuUnbalancedPlugin", { cmd: 2000 }],
-        [6, "MiniGame", "lobbyPlugin", { cmd: 10001 }]
-    ];
-    register.forEach(msg => ws.send(JSON.stringify(msg)));
-}
+let ws;
+let pingInterval;
+let reconnectTimeout;
+let isManuallyClosed = false;
 
 function connectWebSocket() {
-    const ws = new WebSocket("wss://websocket.atpman.net/websocket");
+    ws = new WebSocket("wss://websocket.atpman.net/websocket", {
+        headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0",
+            "Origin": "https://play.789club.sx"
+        }
+    });
 
     ws.on("open", () => {
         console.log("✅ Đã kết nối tới WebSocket 789");
-        startHeartbeat(ws);
 
         const login = [
             1,
@@ -66,20 +53,27 @@ function connectWebSocket() {
             }
         ];
 
-        ws.send(JSON.stringify(login));
-        sendRegister(ws); // gửi ngay sau login
+        const register = [
+            [6, "MiniGame", "taixiuUnbalancedPlugin", { cmd: 2000 }],
+            [6, "MiniGame", "lobbyPlugin", { cmd: 10001 }]
+        ];
 
-        // Thiết lập gửi lại cmd sau mỗi 3 phút
-        clearInterval(resendInterval);
-        resendInterval = setInterval(() => {
-            console.log("🔁 Gửi lại đăng ký nhận kết quả (cmd: 2000 & 10001)");
-            sendRegister(ws);
-        }, 180000); // 180000 ms = 3 phút
+        ws.send(JSON.stringify(login));
+        register.forEach(msg => ws.send(JSON.stringify(msg)));
+
+        // Gửi ping định kỳ
+        pingInterval = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.ping();
+            }
+        }, 15000);
+    });
+
+    ws.on("pong", () => {
+        console.log("📶 Ping OK từ server");
     });
 
     ws.on("message", (data) => {
-        startHeartbeat(ws); // reset timeout nếu có dữ liệu
-
         try {
             const msg = JSON.parse(data);
             if (Array.isArray(msg) && msg[0] === 5 && msg[1]?.cmd === 2006) {
@@ -94,7 +88,7 @@ function connectWebSocket() {
                     ket_qua: `${tong} => ${ket_qua}`
                 };
 
-                console.log(`🆕 Phiên: ${sid} | Xúc xắc: ${d1}-${d2}-${d3} | Tổng: ${tong} => ${ket_qua}`);
+                console.log(`🎲 Phiên: ${sid} | Xúc xắc: ${d1}-${d2}-${d3} | Tổng: ${tong} => ${ket_qua}`);
             }
         } catch (e) {
             console.log("❌ Lỗi xử lý tin nhắn:", e.message);
@@ -102,14 +96,15 @@ function connectWebSocket() {
     });
 
     ws.on("close", () => {
-        console.log("🔌 Mất kết nối! Thử reconnect sau 5s...");
-        clearTimeout(heartbeatTimeout);
-        clearInterval(resendInterval);
-        setTimeout(connectWebSocket, 5000);
+        console.log("🔌 Mất kết nối WebSocket. Thử reconnect sau 2.5s...");
+        clearInterval(pingInterval);
+        if (!isManuallyClosed) {
+            reconnectTimeout = setTimeout(connectWebSocket, 2500);
+        }
     });
 
     ws.on("error", (err) => {
-        console.log("❌ Lỗi WebSocket:", err.message);
+        console.error("❌ Lỗi WebSocket:", err.message);
     });
 }
 
