@@ -126,7 +126,7 @@ function connectWebSocket() {
 
 // === Express API để lấy dữ liệu mới nhất
 const app = express();
-const PORT = 5000;
+const PORT = 8080;
 app.use(cors());
 
 app.get("/", (req, res) => {
