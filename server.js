@@ -2,15 +2,13 @@ const http = require('http');
 const WebSocket = require('ws');
 
 const PORT = process.env.PORT || 5000;
-let html = "";
+let latestResult = {
+  id: "binhtool90",
+  id_phien: 0,
+  ket_qua: "Chưa có kết quả"
+};
 
 const WS_URL = "wss://websocket.atpman.net/websocket";
-const PING_INTERVAL = 10000;
-const CMD2000_INTERVAL = 30000;
-const SIMMS_INTERVAL = 15000;
-
-let lastEventId = 19;
-
 const HEADERS = {
   "Host": "websocket.atpman.net",
   "Origin": "https://play.789club.sx",
@@ -21,11 +19,10 @@ const HEADERS = {
   "Cache-Control": "no-cache"
 };
 
+let lastEventId = 19;
+
 const LOGIN_MESSAGE = [
-  1,
-  "MiniGame",
-  "apitx789",
-  "binhtool90",
+  1, "MiniGame", "apitx789", "binhtool90",
   {
     info: JSON.stringify({
       ipAddress: "2a09:bac5:d44b:16d2::246:d4",
@@ -53,9 +50,9 @@ function connectWebSocket() {
       ws.send(JSON.stringify(SUBSCRIBE_LOBBY));
     }, 1000);
 
-    setInterval(() => ws.send("2"), PING_INTERVAL);
-    setInterval(() => ws.send(JSON.stringify(SUBSCRIBE_TX_RESULT)), CMD2000_INTERVAL);
-    setInterval(() => ws.send(JSON.stringify([7, "Simms", lastEventId, 0, { id: 0 }])), SIMMS_INTERVAL);
+    setInterval(() => ws.send("2"), 10000);
+    setInterval(() => ws.send(JSON.stringify(SUBSCRIBE_TX_RESULT)), 30000);
+    setInterval(() => ws.send(JSON.stringify([7, "Simms", lastEventId, 0, { id: 0 }])), 15000);
   });
 
   ws.on('message', (msg) => {
@@ -67,46 +64,42 @@ function connectWebSocket() {
           lastEventId = data[2];
         }
 
-        if (data.length > 1 && typeof data[1] === 'object') {
-          const payload = data[1];
+        if (data[1]?.cmd === 2006) {
+          const { sid, d1, d2, d3 } = data[1];
+          const tong = d1 + d2 + d3;
+          const ketqua = tong >= 11 ? "Tài" : "Xỉu";
 
-          if (payload.cmd === 2006) {
-            const sid = payload.sid;
-            const d1 = payload.d1;
-            const d2 = payload.d2;
-            const d3 = payload.d3;
-            const total = d1 + d2 + d3;
-            const result = total >= 11 ? "Tài" : "Xỉu";
+          latestResult = {
+            id: "binhtool90",
+            id_phien: sid,
+            ket_qua: `${d1}-${d2}-${d3} = ${tong} (${ketqua})`
+          };
 
-            const line = `Phiên: ${sid} | Xúc xắc: ${d1}-${d2}-${d3} | Tổng: ${total} => ${result} | binhtool90`;
-
-            console.log(line);
-            html = line + "<br>" + html; // Đẩy kết quả mới lên đầu
-          }
+          console.log(latestResult);
         }
       }
     } catch (err) {
-      console.error("Lỗi xử lý:", err.message);
+      console.error("❌ Lỗi message:", err.message);
     }
   });
 
   ws.on('close', () => {
-    console.log("🔌 Mất kết nối WebSocket. Đang thử lại...");
+    console.log("🔌 WebSocket đóng. Kết nối lại sau 5s...");
     setTimeout(connectWebSocket, 5000);
   });
 
   ws.on('error', (err) => {
-    console.error("❌ WebSocket lỗi:", err.message);
+    console.error("❌ Lỗi WebSocket:", err.message);
   });
 }
 
-// HTTP server in kết quả ra trình duyệt
+// HTTP server trả JSON
 const server = http.createServer((req, res) => {
-  res.writeHead(200, { "Content-Type": "text/html" });
-  res.end(`<h2>Kết quả Tài/Xỉu:</h2>${html}`);
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(latestResult));
 });
 
 server.listen(PORT, () => {
-  console.log(`🟢 Server chạy tại http://localhost:${PORT}`);
+  console.log(`🌐 Server đang chạy tại http://localhost:${PORT}`);
   connectWebSocket();
 });
