@@ -1,12 +1,33 @@
 const http = require('http');
 const WebSocket = require('ws');
 
-const PORT = process.env.PORT || 8888;
+const PORT = process.env.PORT || 10000;
 let latestResult = {
   id: "binhtool90",
   id_phien: 0,
   ket_qua: "Chưa có kết quả"
 };
+
+// Lưu lịch sử kết quả T/X tối đa 20 lần
+let patternHistory = "";
+
+// Cập nhật patternHistory
+function updatePatternHistory(result) {
+  if (patternHistory.length >= 20) {
+    patternHistory = patternHistory.slice(1);
+  }
+  patternHistory += result;
+}
+
+// Dự đoán pattern theo kiểu txtxtx đơn giản
+function predictNextFromPattern(history) {
+  if (history.length < 6) return "Chưa đủ dữ liệu dự đoán";
+
+  // Dự đoán ngược lại ký tự cuối cùng (nếu 't' thì 'x', ngược lại cũng vậy)
+  const lastChar = history[history.length - 1];
+  const predicted = lastChar === 't' ? 'x' : 't';
+  return predicted === 't' ? "Tài" : "Xỉu";
+}
 
 const WS_URL = "wss://websocket.atpman.net/websocket";
 const HEADERS = {
@@ -75,7 +96,12 @@ function connectWebSocket() {
             ket_qua: `${d1}-${d2}-${d3} = ${tong} (${ketqua})`
           };
 
+          // Cập nhật patternHistory
+          const resultTX = ketqua === "Tài" ? 't' : 'x';
+          updatePatternHistory(resultTX);
+
           console.log(latestResult);
+          console.log("🔮 Dự đoán pattern tiếp theo:", predictNextFromPattern(patternHistory));
         }
       }
     } catch (err) {
@@ -93,10 +119,19 @@ function connectWebSocket() {
   });
 }
 
-// HTTP server trả JSON
+// HTTP server trả JSON kèm dự đoán
 const server = http.createServer((req, res) => {
-  res.writeHead(200, { "Content-Type": "application/json" });
-  res.end(JSON.stringify(latestResult));
+  if (req.url === "/taixiu") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({
+      latestResult,
+      patternHistory,
+      duDoanPattern: predictNextFromPattern(patternHistory)
+    }));
+  } else {
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.end("Không tìm thấy");
+  }
 });
 
 server.listen(PORT, () => {
